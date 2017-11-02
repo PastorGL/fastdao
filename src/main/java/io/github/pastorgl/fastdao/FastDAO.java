@@ -274,7 +274,6 @@ public abstract class FastDAO<E extends FastEntity> {
         Connection con = null;
         PreparedStatement ps = null;
         ResultSet rs = null;
-        Object id = null;
 
         try {
             StringBuilder sb = new StringBuilder("INSERT INTO " + tableName + " (");
@@ -313,7 +312,14 @@ public abstract class FastDAO<E extends FastEntity> {
             ps.executeUpdate();
             rs = ps.getGeneratedKeys();
             rs.next();
-            id = rs.getObject(pkName);
+            switch (rs.getMetaData().getColumnCount()) {
+                case 0:
+                    return null;
+                case 1:
+                    return rs.getObject(1);
+                default:
+                    return rs.getObject(pkName);
+            }
         } catch (Exception e) {
             throw new FastDAOException("insert - single", e);
         } finally {
@@ -321,8 +327,6 @@ public abstract class FastDAO<E extends FastEntity> {
             closeStatement(ps);
             closeConnection(con);
         }
-
-        return id;
     }
 
     /**
@@ -558,7 +562,7 @@ public abstract class FastDAO<E extends FastEntity> {
      *
      * @param pk primary key value
      */
-    protected void deleteByPK(Object pk) throws Exception {
+    protected void deleteByPK(Object pk) {
         if (pk == null) {
             return;
         }
