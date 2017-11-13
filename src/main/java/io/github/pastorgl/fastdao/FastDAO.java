@@ -40,6 +40,10 @@ public abstract class FastDAO<E extends FastEntity> {
      * Persistent class fields cache
      */
     private Map<String, Field> fields = new HashMap<>();
+    /**
+     * Persistent class field annotations cache
+     */
+    private Map<Field, Column> columns = new HashMap<>();
 
     {
         persistentClass = (Class<E>) ((ParameterizedType) getClass()
@@ -60,9 +64,12 @@ public abstract class FastDAO<E extends FastEntity> {
 
                 String columnName;
                 if (field.isAnnotationPresent(Column.class)) {
-                    columnName = field.getAnnotation(Column.class).value();
+                    Column column = field.getAnnotation(Column.class);
+                    columnName = column.value();
                     revMapping.put(columnName, fieldName);
                     fwMapping.put(fieldName, columnName);
+
+                    columns.put(field, column);
                 } else {
                     columnName = fieldName;
                 }
@@ -176,7 +183,7 @@ public abstract class FastDAO<E extends FastEntity> {
                     if (type.isEnum()) {
                         field.set(e, Enum.valueOf((Class<Enum>) type, rs.getString(i)));
                     } else {
-                        field.set(e, rs.getObject(i));
+                        convertFromRetrieve(field, e, rs.getObject(i));
                     }
                 }
 
@@ -241,7 +248,7 @@ public abstract class FastDAO<E extends FastEntity> {
                 Object o = objects.get(i);
                 for (Field field : fields.values()) {
                     if (!pkName.equals(getFwMapping(field.getName()))) {
-                        setObject(ps, k++, field.get(o));
+                        setObject(ps, k++, convertToStore(field, o));
                     }
                 }
                 ps.addBatch();
@@ -305,7 +312,7 @@ public abstract class FastDAO<E extends FastEntity> {
             k = 1;
             for (Field field : fields.values()) {
                 if (!pkName.equals(getFwMapping(field.getName()))) {
-                    setObject(ps, k++, field.get(object));
+                    setObject(ps, k++, convertToStore(field, object));
                 }
             }
 
@@ -379,10 +386,10 @@ public abstract class FastDAO<E extends FastEntity> {
                 k = 1;
                 for (Field field : fields.values()) {
                     if (!getFwMapping(field.getName()).equals(pkName)) {
-                        setObject(ps, k++, field.get(object));
+                        setObject(ps, k++, convertToStore(field, object));
                     }
                 }
-                setObject(ps, k, key.get(object));
+                setObject(ps, k, convertToStore(key, object));
                 ps.addBatch();
 
                 if (b == batchSize) {
@@ -444,10 +451,10 @@ public abstract class FastDAO<E extends FastEntity> {
             k = 1;
             for (Field field : fields.values()) {
                 if (!getFwMapping(field.getName()).equals(pkName)) {
-                    setObject(ps, k++, field.get(object));
+                    setObject(ps, k++, convertToStore(field, object));
                 }
             }
-            setObject(ps, k, key.get(object));
+            setObject(ps, k, convertToStore(key, object));
 
             ps.executeUpdate();
         } catch (Exception e) {
@@ -491,7 +498,7 @@ public abstract class FastDAO<E extends FastEntity> {
             ps = con.prepareStatement(sb.toString());
             int k = 1;
             for (E object : objects) {
-                setObject(ps, k++, key.get(object));
+                setObject(ps, k++, convertToStore(key, object));
             }
 
             ps.executeUpdate();
@@ -521,7 +528,7 @@ public abstract class FastDAO<E extends FastEntity> {
 
             con = ds.getConnection();
             ps = con.prepareStatement("DELETE FROM " + tableName + " WHERE " + pkName + "=?");
-            setObject(ps, 1, key.get(object));
+            setObject(ps, 1, convertToStore(key, object));
 
             ps.executeUpdate();
         } catch (Exception e) {
@@ -571,9 +578,11 @@ public abstract class FastDAO<E extends FastEntity> {
         PreparedStatement ps = null;
 
         try {
+            Field key = fields.get(getRevMapping(pkName));
+
             con = ds.getConnection();
             ps = con.prepareStatement("DELETE FROM " + tableName + " WHERE " + pkName + "=?");
-            setObject(ps, 1, pk);
+            setObject(ps, 1, convertToStore(key, pk));
 
             ps.executeUpdate();
         } catch (Exception e) {
@@ -617,6 +626,24 @@ public abstract class FastDAO<E extends FastEntity> {
         }
 
         s.setObject(i, a);
+    }
+
+    private Object convertToStore(Field field, Object object) throws Exception {
+        Object fieldValue = field.get(object);
+        if (columns.containsKey(field)) {
+            return columns.get(field).store().newInstance().store(ds.getConnection(), fieldValue);
+        }
+
+        return fieldValue;
+    }
+
+    private void convertFromRetrieve(Field field, Object object, Object dbValue) throws Exception {
+        Object value = dbValue;
+        if (columns.containsKey(field)) {
+            value = columns.get(field).retrieve().newInstance().retrieve(dbValue);
+        }
+
+        field.set(object, value);
     }
 
     private void closeStatement(Statement stmt) {

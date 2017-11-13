@@ -9,4 +9,8 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 public @interface Column {
     String value();
+
+    Class<? extends StoreConverter> store() default StoreConverter.NullConverter.class;
+
+    Class<? extends RetrieveConverter> retrieve() default RetrieveConverter.NullConverter.class;
 }
