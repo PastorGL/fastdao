@@ -128,11 +128,11 @@ public abstract class FastDAO<E extends FastEntity> {
                             found = true;
                         }
                     } while (!found);
-                    sb.append(query.substring(r, q));
+                    sb.append(query, r, q);
                     r = q + 1;
 
                     if (a instanceof Object[]) {
-                        a = Arrays.asList(a);
+                        a = Collections.singletonList(a);
                     }
                     if (a instanceof List) {
                         List<Object> aa = (List<Object>) a;
@@ -176,7 +176,7 @@ public abstract class FastDAO<E extends FastEntity> {
                 E e = persistentClass.newInstance();
 
                 for (int i = 1; i <= cnt; i++) {
-                    String colName = md.getColumnName(i);
+                    String colName = md.getColumnLabel(i);
                     Field field = fields.get(getRevMapping(colName));
                     Class<?> type = field.getType();
 
