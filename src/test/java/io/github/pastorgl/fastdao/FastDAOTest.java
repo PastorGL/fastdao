@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class FastDAOTest {
@@ -44,6 +45,9 @@ public class FastDAOTest {
         one.setId(id);
         assertTrue(one.equals(_one));
 
+        underTest.deleteByPK(id);
+
+        assertNull(underTest.getByPK(id));
     }
 
     @Table("test_entity")

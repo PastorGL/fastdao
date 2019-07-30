@@ -571,18 +571,24 @@ public abstract class FastDAO<E extends FastEntity> {
      */
     protected void deleteByPK(Object pk) {
         if (pk == null) {
-            return;
+            throw new FastDAOException("delete - single", new NullPointerException());
+        }
+
+        Class<?> type = fields.get(getRevMapping(pkName)).getType();
+        if (!type.isInstance(pk)) {
+            throw new FastDAOException("delete - single", new IllegalArgumentException(
+                    "Unexpected primary key type. Expected: " + type.getCanonicalName() + " but passed is: " + pk.getClass()
+                            .getCanonicalName()));
         }
 
         Connection con = null;
         PreparedStatement ps = null;
 
         try {
-            Field key = fields.get(getRevMapping(pkName));
 
             con = ds.getConnection();
             ps = con.prepareStatement("DELETE FROM " + tableName + " WHERE " + pkName + "=?");
-            setObject(ps, 1, convertToStore(key, pk));
+            setObject(ps, 1, pk);
 
             ps.executeUpdate();
         } catch (Exception e) {
