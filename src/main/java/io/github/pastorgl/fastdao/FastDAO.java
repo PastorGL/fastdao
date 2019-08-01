@@ -89,6 +89,10 @@ public abstract class FastDAO<E extends FastEntity> {
         FastDAO.ds = ds;
     }
 
+    static protected DataSource getDataSource() {
+        return ds;
+    }
+
     static public void setBatchSize(int batchSize) {
         FastDAO.batchSize = batchSize;
     }
