@@ -289,22 +289,32 @@ public abstract class FastDAO<E extends FastEntity> {
         try {
             StringBuilder sb = new StringBuilder("INSERT INTO " + tableName + " (");
 
-            int k = 0;
-            for (Field f : fields.values()) {
-                String colName = getFwMapping(f.getName());
+            boolean generateKey = true;
+
+            int k = 0, fc = 0;
+            for (Field field : fields.values()) {
+                String colName = getFwMapping(field.getName());
                 if (!pkName.equals(colName)) {
                     if (k++ > 0) {
                         sb.append(",");
                     }
                     sb.append(colName);
+                    fc++;
+                } else {
+                    if (field.get(object) != null) {
+                        if (k++ > 0) {
+                            sb.append(",");
+                        }
+                        sb.append(colName);
+                        fc++;
+                        generateKey = false;
+                    }
                 }
             }
 
-            sb.append(") VALUES ");
-            int length = fields.size();
-            sb.append("(");
-            for (int j = 1; j < length; j++) {
-                if (j > 1) {
+            sb.append(") VALUES (");
+            for (int j = 0; j < fc; j++) {
+                if (j > 0) {
                     sb.append(",");
                 }
                 sb.append("?");
@@ -314,23 +324,37 @@ public abstract class FastDAO<E extends FastEntity> {
             con = ds.getConnection();
             ps = con.prepareStatement(sb.toString(), PreparedStatement.RETURN_GENERATED_KEYS);
             k = 1;
+            Object key = null;
+            Field keyField = null;
             for (Field field : fields.values()) {
                 if (!pkName.equals(getFwMapping(field.getName()))) {
                     setObject(ps, k++, convertToStore(field, object));
+                } else {
+                    keyField = field;
+                    if (!generateKey) {
+                        key = convertToStore(keyField, object);
+                        setObject(ps, k++, key);
+                    }
                 }
             }
 
             ps.executeUpdate();
-            rs = ps.getGeneratedKeys();
-            rs.next();
-            switch (rs.getMetaData().getColumnCount()) {
-                case 0:
-                    return null;
-                case 1:
-                    return rs.getObject(1);
-                default:
-                    return rs.getObject(pkName);
+            if (generateKey) {
+                rs = ps.getGeneratedKeys();
+                rs.next();
+                switch (rs.getMetaData().getColumnCount()) {
+                    case 0: // null key
+                        break;
+                    case 1: {
+                        key = rs.getObject(1);
+                        break;
+                    }
+                    default:
+                        key = rs.getObject(pkName);
+                }
             }
+
+            return convertFromRetrieve(keyField, object, key);
         } catch (Exception e) {
             throw new FastDAOException("insert - single", e);
         } finally {
@@ -647,13 +671,14 @@ public abstract class FastDAO<E extends FastEntity> {
         return fieldValue;
     }
 
-    private void convertFromRetrieve(Field field, Object object, Object dbValue) throws Exception {
+    private Object convertFromRetrieve(Field field, Object object, Object dbValue) throws Exception {
         Object value = dbValue;
         if (columns.containsKey(field)) {
             value = columns.get(field).retrieve().newInstance().retrieve(dbValue);
         }
 
         field.set(object, value);
+        return value;
     }
 
     private void closeStatement(Statement stmt) {
